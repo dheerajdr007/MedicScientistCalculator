@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4a5568;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+/* Thin scrollbar utility */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Code block styling */
+pre {
+  tab-size: 4;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Pulse animation for unmatched brackets */
+@keyframes bracketPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Button press effect */
+button:active {
+  transform: scale(0.95);
+}
+
+/* Gradient text support */
+.bg-clip-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Selection color */
+::selection {
+  background: #4f46e5;
+  color: white;
+}
+
+/* Focus styles for accessibility */
+button:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
+
+input:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
