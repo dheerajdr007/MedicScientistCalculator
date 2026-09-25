@@ -433,7 +433,11 @@ function CalculationSteps({ steps, isVisible }: { steps: CalcStep[]; isVisible: 
 }
 
 // ─── Main Calculator Component ───────────────────────────────────────
-export default function Calculator() {
+interface CalculatorProps {
+  onCalculation?: () => void;
+}
+
+export default function Calculator({ onCalculation }: CalculatorProps) {
   const [display, setDisplay] = useState('');
   const [history, setHistory] = useState<Array<{ expr: string; result: string; isError: boolean }>>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -496,7 +500,12 @@ export default function Calculator() {
     setLastError(null);
     setHistory(prev => [{ expr: display, result, isError: false }, ...prev.slice(0, 49)]);
     setDisplay(result);
-  }, [display]);
+    
+    // Notify ad manager of calculation
+    if (onCalculation) {
+      onCalculation();
+    }
+  }, [display, onCalculation]);
 
   const handleAutoCloseBrackets = useCallback(() => {
     setDisplay(prev => {

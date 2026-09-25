@@ -2,14 +2,30 @@ import { useState } from 'react';
 import Calculator from './components/Calculator';
 import SourceViewer from './components/SourceViewer';
 import ArchitectureDiagram from './components/ArchitectureDiagram';
+import {
+  BannerAd,
+  InterstitialAd,
+  NativeAd,
+  AdBlockerWarning,
+  useAdManager,
+  AD_CONFIG,
+} from './components/AdManager';
 
 type Tab = 'calculator' | 'source' | 'architecture';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('calculator');
+  const adManager = useAdManager();
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+      {/* Top Banner Ad */}
+      <div className="w-full bg-gray-900 border-b border-gray-800 px-4 py-2">
+        <div className="max-w-6xl mx-auto">
+          <BannerAd position="top" size="banner" />
+        </div>
+      </div>
+
       {/* Header */}
       <header className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-gray-700 shadow-xl">
         <div className="max-w-6xl mx-auto px-4 py-6">
@@ -22,7 +38,7 @@ function App() {
                 Modular Architecture: Tokenizer → Parser → AST → Evaluator
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="bg-gray-800 text-gray-300 text-xs px-3 py-1 rounded-full border border-gray-600">
                 C11
               </span>
@@ -32,19 +48,22 @@ function App() {
               <span className="bg-gray-800 text-gray-300 text-xs px-3 py-1 rounded-full border border-gray-600">
                 Makefile
               </span>
+              <span className="bg-indigo-900/50 text-indigo-300 text-xs px-3 py-1 rounded-full border border-indigo-700">
+                📢 AdMob Integrated
+              </span>
             </div>
           </div>
         </div>
       </header>
 
       {/* Navigation Tabs */}
-      <nav className="bg-gray-900 border-b border-gray-700 sticky top-0 z-50">
+      <nav className="bg-gray-900 border-b border-gray-700 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-1">
             {([
-              { id: 'calculator' as Tab, label: '🧮 Interactive Calculator', icon: '' },
-              { id: 'source' as Tab, label: '📁 Source Code', icon: '' },
-              { id: 'architecture' as Tab, label: '🏗️ Architecture', icon: '' },
+              { id: 'calculator' as Tab, label: '🧮 Interactive Calculator' },
+              { id: 'source' as Tab, label: '📁 Source Code' },
+              { id: 'architecture' as Tab, label: '🏗️ Architecture' },
             ]).map(tab => (
               <button
                 key={tab.id}
@@ -62,18 +81,48 @@ function App() {
         </div>
       </nav>
 
+      {/* Ad Blocker Warning */}
+      {adManager.adBlockDetected && (
+        <div className="max-w-6xl mx-auto px-4 pt-4">
+          <AdBlockerWarning />
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
         {activeTab === 'calculator' && (
-          <div className="space-y-8">
-            <div className="text-center mb-8">
+          <div className="space-y-6">
+            <div className="text-center mb-6">
               <h2 className="text-xl font-bold text-white mb-2">Interactive Demo</h2>
               <p className="text-gray-400 text-sm max-w-lg mx-auto">
-                This web calculator implements the same logic as the C version. 
+                This web calculator implements the same logic as the C version.
                 Try entering expressions to see how the calculator works.
               </p>
+              <p className="text-indigo-400 text-xs mt-2">
+                📢 Interstitial ad appears every {AD_CONFIG.TIMING.INTERSTITIAL_INTERVAL} calculations
+                (Current: {adManager.calculationCount})
+              </p>
             </div>
-            <Calculator />
+
+            {/* Calculator with native ad */}
+            <Calculator onCalculation={adManager.recordCalculation} />
+
+            {/* Native inline ad after calculator */}
+            <div className="max-w-lg mx-auto">
+              <NativeAd />
+            </div>
+
+            {/* Show interstitial trigger button */}
+            {adManager.interstitialReady && !adManager.showInterstitial && (
+              <div className="text-center">
+                <button
+                  onClick={adManager.showInterstitialAd}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-4 py-2 rounded-full transition-colors animate-pulse"
+                >
+                  📢 View Sponsored Content ({adManager.calculationCount} calculations)
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -82,12 +131,17 @@ function App() {
             <div className="text-center mb-6">
               <h2 className="text-xl font-bold text-white mb-2">C Source Code</h2>
               <p className="text-gray-400 text-sm max-w-lg mx-auto">
-                Browse through each source file. The calculator is split into separate modules 
+                Browse through each source file. The calculator is split into separate modules
                 for tokenizing, parsing, and evaluating expressions.
               </p>
             </div>
             <SourceViewer />
-            
+
+            {/* Mid-content banner ad */}
+            <div className="my-6">
+              <BannerAd position="bottom" size="large-banner" />
+            </div>
+
             {/* Build instructions */}
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-700 mt-8">
               <h3 className="text-white font-bold text-lg mb-4">🔨 Build Instructions</h3>
@@ -112,12 +166,15 @@ function App() {
             <div className="text-center mb-6">
               <h2 className="text-xl font-bold text-white mb-2">System Architecture</h2>
               <p className="text-gray-400 text-sm max-w-lg mx-auto">
-                The calculator follows a classic compiler pipeline architecture, 
+                The calculator follows a classic compiler pipeline architecture,
                 separating concerns into distinct phases.
               </p>
             </div>
             <ArchitectureDiagram />
-            
+
+            {/* Native ad between sections */}
+            <NativeAd />
+
             {/* Operator Precedence Table */}
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-700 mt-8">
               <h3 className="text-white font-bold text-lg mb-4">⚡ Operator Precedence (Low to High)</h3>
@@ -218,22 +275,45 @@ function App() {
         )}
       </main>
 
+      {/* Bottom Banner Ad */}
+      <div className="w-full bg-gray-900 border-t border-gray-800 px-4 py-2">
+        <div className="max-w-6xl mx-auto">
+          <BannerAd position="bottom" size="banner" />
+        </div>
+      </div>
+
       {/* Footer */}
-      <footer className="bg-gray-900 border-t border-gray-700 mt-12">
+      <footer className="bg-gray-900 border-t border-gray-700">
         <div className="max-w-6xl mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-gray-500 text-sm">
-              Scientific Calculator in C — Modular Architecture with separate files for each phase
+              Scientific Calculator in C — Modular Architecture
             </p>
-            <div className="flex gap-4 text-gray-500 text-xs">
+            <div className="flex gap-4 text-gray-500 text-xs flex-wrap justify-center">
               <span>📁 tokenizer.c/h</span>
               <span>📁 parser.c/h</span>
               <span>📁 evaluator.c/h</span>
               <span>📁 main.c</span>
+              <span className="text-indigo-400">📢 AdManager.tsx</span>
             </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-800 text-center">
+            <p className="text-gray-600 text-xs">
+              📢 Ad Integration: Google AdSense (Web) / AdMob (Mobile) | Demo Mode Active
+            </p>
+            <p className="text-gray-700 text-xs mt-1">
+              Replace AD_CONFIG.PUBLISHER_ID with your real publisher ID to show live ads
+            </p>
           </div>
         </div>
       </footer>
+
+      {/* Interstitial Ad Overlay */}
+      <InterstitialAd
+        isVisible={adManager.showInterstitial}
+        onClose={adManager.closeInterstitial}
+        countdown={5}
+      />
     </div>
   );
 }
