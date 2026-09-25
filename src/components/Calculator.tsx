@@ -4,15 +4,14 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 interface BracketInfo {
   openCount: number;
   closeCount: number;
-  unclosed: number;       // how many '(' still need ')'
-  extraClose: number;     // how many ')' have no matching '('
+  unclosed: number;
+  extraClose: number;
   isBalanced: boolean;
-  // Per-character bracket status for coloring
   charStatus: Array<{ char: string; status: 'matched' | 'unclosed-open' | 'unclosed-close' | 'normal' }>;
 }
 
 function analyzeBrackets(expr: string): BracketInfo {
-  const stack: number[] = []; // stores indices of unmatched '('
+  const stack: number[] = [];
   const charStatus: BracketInfo['charStatus'] = [];
   const matchedOpen = new Set<number>();
   const matchedClose = new Set<number>();
@@ -21,7 +20,7 @@ function analyzeBrackets(expr: string): BracketInfo {
     const ch = expr[i];
     if (ch === '(') {
       stack.push(i);
-      charStatus.push({ char: ch, status: 'unclosed-open' }); // tentative
+      charStatus.push({ char: ch, status: 'unclosed-open' });
     } else if (ch === ')') {
       if (stack.length > 0) {
         const openIdx = stack.pop()!;
@@ -36,7 +35,6 @@ function analyzeBrackets(expr: string): BracketInfo {
     }
   }
 
-  // Mark remaining unclosed opens
   for (const idx of stack) {
     charStatus[idx] = { char: '(', status: 'unclosed-open' };
   }
@@ -56,12 +54,194 @@ function analyzeBrackets(expr: string): BracketInfo {
   };
 }
 
+// ─── Step-by-Step Evaluation ─────────────────────────────────────────
+interface CalcStep {
+  description: string;
+  expression: string;
+  result: string;
+  highlight?: string; // Part being evaluated
+}
+
+function evaluateWithSteps(expr: string): { steps: CalcStep[]; finalResult: string; error: string | null } {
+  const steps: CalcStep[] = [];
+  
+  try {
+    if (expr.trim() === '') return { steps: [], finalResult: '', error: null };
+
+    const bracketInfo = analyzeBrackets(expr);
+    if (!bracketInfo.isBalanced) {
+      if (bracketInfo.unclosed > 0) {
+        return { steps: [], finalResult: '', error: `Missing ${bracketInfo.unclosed} closing bracket${bracketInfo.unclosed > 1 ? 's' : ''}` };
+      }
+      return { steps: [], finalResult: '', error: `${bracketInfo.extraClose} extra closing bracket${bracketInfo.extraClose > 1 ? 's' : ''}` };
+    }
+
+    let current = expr;
+    
+    // Step 1: Show original expression
+    steps.push({
+      description: 'Original expression',
+      expression: current,
+      result: current,
+    });
+
+    // Step 2: Evaluate functions and constants
+    const funcPattern = /(sin|cos|tan|asin|acos|atan|log|ln|sqrt|abs)\(([^()]+)\)/g;
+    let match;
+    let hasFunctions = false;
+    
+    while ((match = funcPattern.exec(current)) !== null) {
+      hasFunctions = true;
+      const funcName = match[1];
+      const arg = match[2];
+      
+      let processed = current
+        .replace(/π/g, String(Math.PI))
+        .replace(/\bpi\b/g, String(Math.PI))
+        .replace(/(?<![a-zA-Z])e(?![a-zA-Z])/g, String(Math.E));
+      
+      const argEval = new Function(`"use strict"; return (${arg.replace(/π/g, String(Math.PI)).replace(/\bpi\b/g, String(Math.PI)).replace(/(?<![a-zA-Z])e(?![a-zA-Z])/g, String(Math.E))})`)();
+      
+      let funcResult: number;
+      switch (funcName) {
+        case 'sin': funcResult = Math.sin(argEval); break;
+        case 'cos': funcResult = Math.cos(argEval); break;
+        case 'tan': funcResult = Math.tan(argEval); break;
+        case 'asin': funcResult = Math.asin(argEval); break;
+        case 'acos': funcResult = Math.acos(argEval); break;
+        case 'atan': funcResult = Math.atan(argEval); break;
+        case 'log': funcResult = Math.log10(argEval); break;
+        case 'ln': funcResult = Math.log(argEval); break;
+        case 'sqrt': funcResult = Math.sqrt(argEval); break;
+        case 'abs': funcResult = Math.abs(argEval); break;
+        default: funcResult = 0;
+      }
+      
+      const resultStr = Number.isInteger(funcResult) ? funcResult.toString() : parseFloat(funcResult.toPrecision(6)).toString();
+      
+      steps.push({
+        description: `Evaluate ${funcName}(${arg})`,
+        expression: match[0],
+        result: resultStr,
+        highlight: match[0],
+      });
+      
+      current = current.replace(match[0], resultStr);
+    }
+
+    // Replace constants
+    if (current.includes('pi') || current.includes('π')) {
+      steps.push({
+        description: 'Replace π constant',
+        expression: 'π',
+        result: Math.PI.toFixed(6),
+        highlight: 'π',
+      });
+      current = current.replace(/π/g, String(Math.PI)).replace(/\bpi\b/g, String(Math.PI));
+    }
+    
+    if (/(?<![a-zA-Z])e(?![a-zA-Z])/.test(current)) {
+      steps.push({
+        description: 'Replace e constant',
+        expression: 'e',
+        result: Math.E.toFixed(6),
+        highlight: 'e',
+      });
+      current = current.replace(/(?<![a-zA-Z])e(?![a-zA-Z])/g, String(Math.E));
+    }
+
+    // Step 3: Evaluate factorials
+    const factorialPattern = /(\d+)!/g;
+    while ((match = factorialPattern.exec(current)) !== null) {
+      const num = parseInt(match[1]);
+      let factorial = 1;
+      for (let i = 2; i <= num; i++) factorial *= i;
+      
+      steps.push({
+        description: `Evaluate ${num}!`,
+        expression: `${num}!`,
+        result: factorial.toString(),
+        highlight: `${num}!`,
+      });
+      
+      current = current.replace(match[0], factorial.toString());
+    }
+
+    // Step 4: Evaluate powers
+    const powerPattern = /(\d+(?:\.\d+)?)\^(\d+(?:\.\d+)?)/g;
+    while ((match = powerPattern.exec(current)) !== null) {
+      const base = parseFloat(match[1]);
+      const exp = parseFloat(match[2]);
+      const result = Math.pow(base, exp);
+      const resultStr = Number.isInteger(result) ? result.toString() : parseFloat(result.toPrecision(6)).toString();
+      
+      steps.push({
+        description: `Evaluate ${match[1]}^${match[2]}`,
+        expression: match[0],
+        result: resultStr,
+        highlight: match[0],
+      });
+      
+      current = current.replace(match[0], resultStr);
+    }
+
+    // Step 5: Evaluate multiplication/division (left to right)
+    const mulDivPattern = /(\d+(?:\.\d+)?)\s*([*/])\s*(\d+(?:\.\d+)?)/;
+    while ((match = current.match(mulDivPattern)) !== null) {
+      const left = parseFloat(match[1]);
+      const op = match[2];
+      const right = parseFloat(match[3]);
+      const result = op === '*' ? left * right : left / right;
+      const resultStr = Number.isInteger(result) ? result.toString() : parseFloat(result.toPrecision(6)).toString();
+      
+      steps.push({
+        description: `Evaluate ${match[1]} ${op} ${match[3]}`,
+        expression: match[0],
+        result: resultStr,
+        highlight: match[0],
+      });
+      
+      current = current.replace(match[0], resultStr);
+    }
+
+    // Step 6: Evaluate addition/subtraction (left to right)
+    const addSubPattern = /(\d+(?:\.\d+)?)\s*([+-])\s*(\d+(?:\.\d+)?)/;
+    while ((match = current.match(addSubPattern)) !== null) {
+      const left = parseFloat(match[1]);
+      const op = match[2];
+      const right = parseFloat(match[3]);
+      const result = op === '+' ? left + right : left - right;
+      const resultStr = Number.isInteger(result) ? result.toString() : parseFloat(result.toPrecision(6)).toString();
+      
+      steps.push({
+        description: `Evaluate ${match[1]} ${op} ${match[3]}`,
+        expression: match[0],
+        result: resultStr,
+        highlight: match[0],
+      });
+      
+      current = current.replace(match[0], resultStr);
+    }
+
+    // Final result
+    const finalResult = current.trim();
+    steps.push({
+      description: 'Final result',
+      expression: expr,
+      result: finalResult,
+    });
+
+    return { steps, finalResult, error: null };
+  } catch {
+    return { steps, finalResult: '', error: 'Calculation error' };
+  }
+}
+
 // ─── Expression Evaluator ────────────────────────────────────────────
 function evaluateExpression(expr: string): { result: string; error: string | null } {
   try {
     if (expr.trim() === '') return { result: '', error: null };
 
-    // Check bracket balance first
     const bracketInfo = analyzeBrackets(expr);
     if (!bracketInfo.isBalanced) {
       if (bracketInfo.unclosed > 0) {
@@ -88,7 +268,6 @@ function evaluateExpression(expr: string): { result: string; error: string | nul
       .replace(/\babs\b/g, 'Math.abs')
       .replace(/\^/g, '**');
 
-    // Handle factorial
     processed = processed.replace(/(\d+(?:\.\d+)?)!/g, (_, n) => {
       const num = parseFloat(n);
       if (num < 0 || num !== Math.floor(num)) return 'NaN';
@@ -152,7 +331,6 @@ function BracketStatusBar({ bracketInfo }: { bracketInfo: BracketInfo }) {
 
   return (
     <div className="flex items-center gap-2 text-xs mt-2 flex-wrap">
-      {/* Open brackets */}
       <div className="flex items-center gap-1">
         <span className="text-gray-500">(</span>
         <span className={`font-bold ${bracketInfo.unclosed > 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -163,7 +341,6 @@ function BracketStatusBar({ bracketInfo }: { bracketInfo: BracketInfo }) {
 
       <span className="text-gray-600">|</span>
 
-      {/* Close brackets */}
       <div className="flex items-center gap-1">
         <span className="text-gray-500">)</span>
         <span className={`font-bold ${bracketInfo.extraClose > 0 ? 'text-orange-400' : 'text-green-400'}`}>
@@ -174,7 +351,6 @@ function BracketStatusBar({ bracketInfo }: { bracketInfo: BracketInfo }) {
 
       <span className="text-gray-600">|</span>
 
-      {/* Status indicator */}
       {bracketInfo.isBalanced ? (
         <span className="flex items-center gap-1 text-green-400">
           <span className="inline-block w-2 h-2 rounded-full bg-green-400"></span>
@@ -192,7 +368,6 @@ function BracketStatusBar({ bracketInfo }: { bracketInfo: BracketInfo }) {
         </span>
       )}
 
-      {/* Visual bracket stack */}
       {bracketInfo.unclosed > 0 && (
         <div className="flex gap-0.5 ml-1">
           {Array.from({ length: Math.min(bracketInfo.unclosed, 10) }).map((_, i) => (
@@ -211,6 +386,52 @@ function BracketStatusBar({ bracketInfo }: { bracketInfo: BracketInfo }) {
   );
 }
 
+// ─── Calculation Steps Display ───────────────────────────────────────
+function CalculationSteps({ steps, isVisible }: { steps: CalcStep[]; isVisible: boolean }) {
+  if (!isVisible || steps.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0 bg-gray-950/95 backdrop-blur-sm rounded-xl p-4 overflow-y-auto animate-fade-in z-10">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-indigo-400 font-bold text-sm">📊 Calculation Steps</h3>
+        <span className="text-gray-500 text-xs">{steps.length} steps</span>
+      </div>
+      
+      <div className="space-y-2">
+        {steps.map((step, i) => (
+          <div
+            key={i}
+            className={`bg-gray-900 rounded-lg p-3 border-l-4 ${
+              i === steps.length - 1 ? 'border-green-500' : 'border-indigo-500'
+            }`}
+            style={{ animationDelay: `${i * 0.1}s` }}
+          >
+            <div className="flex items-start gap-2">
+              <span className="text-indigo-400 font-mono text-xs font-bold shrink-0">
+                {i + 1}.
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-400 text-xs mb-1">{step.description}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-white font-mono text-sm bg-gray-800 px-2 py-0.5 rounded">
+                    {step.expression}
+                  </span>
+                  <span className="text-gray-500">→</span>
+                  <span className={`font-mono text-sm font-bold ${
+                    i === steps.length - 1 ? 'text-green-400' : 'text-cyan-400'
+                  }`}>
+                    {step.result}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Calculator Component ───────────────────────────────────────
 export default function Calculator() {
   const [display, setDisplay] = useState('');
@@ -219,39 +440,33 @@ export default function Calculator() {
   const [autoClose, setAutoClose] = useState(true);
   const [lastError, setLastError] = useState<string | null>(null);
   const [showResultPreview, setShowResultPreview] = useState(false);
+  const [showSteps, setShowSteps] = useState(false);
+  const [calcSteps, setCalcSteps] = useState<CalcStep[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const bracketInfo = useMemo(() => analyzeBrackets(display), [display]);
 
-  // Live preview of result
   const livePreview = useMemo(() => {
     if (display.trim() === '' || !bracketInfo.isBalanced) return null;
     const { result, error } = evaluateExpression(display);
     if (error) return null;
-    if (result === display) return null; // Don't show if it's the same
+    if (result === display) return null;
     return result;
   }, [display, bracketInfo.isBalanced]);
 
   const handleInput = useCallback((value: string) => {
     setLastError(null);
-    setDisplay(prev => {
-      let newExpr = prev + value;
-      // Auto-close: if user types a function like sin(, auto-add )
-      if (autoClose && /^(sin|cos|tan|asin|acos|atan|log|ln|sqrt|abs)\($/.test(value)) {
-        // Don't auto-close here, let user close manually but show hint
-      }
-      return newExpr;
-    });
-  }, [autoClose]);
+    setDisplay(prev => prev + value);
+  }, []);
 
   const handleClear = useCallback(() => {
     setDisplay('');
     setLastError(null);
+    setShowSteps(false);
   }, []);
 
   const handleBackspace = useCallback(() => {
     setDisplay(prev => {
-      // If last chars form a function name + '(', remove whole function
       const funcPatterns = ['sin(', 'cos(', 'tan(', 'asin(', 'acos(', 'atan(', 'log(', 'ln(', 'sqrt(', 'abs('];
       for (const fn of funcPatterns) {
         if (prev.endsWith(fn)) {
@@ -273,6 +488,11 @@ export default function Calculator() {
       return;
     }
     
+    // Generate calculation steps
+    const { steps } = evaluateWithSteps(display);
+    setCalcSteps(steps);
+    setShowSteps(true);
+    
     setLastError(null);
     setHistory(prev => [{ expr: display, result, isError: false }, ...prev.slice(0, 49)]);
     setDisplay(result);
@@ -288,7 +508,6 @@ export default function Calculator() {
     });
   }, []);
 
-  // Keyboard support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
@@ -313,7 +532,6 @@ export default function Calculator() {
   }, [handleInput, handleEvaluate, handleBackspace, handleClear]);
 
   const buttons = [
-    // Row 1: Scientific functions
     { label: 'sin(', value: 'sin(', class: 'func' },
     { label: 'cos(', value: 'cos(', class: 'func' },
     { label: 'tan(', value: 'tan(', class: 'func' },
@@ -322,12 +540,10 @@ export default function Calculator() {
     { label: 'acos(', value: 'acos(', class: 'func' },
     { label: 'atan(', value: 'atan(', class: 'func' },
     { label: 'e', value: 'e', class: 'const' },
-    // Row 2: More functions
     { label: 'log(', value: 'log(', class: 'func' },
     { label: 'ln(', value: 'ln(', class: 'func' },
     { label: 'sqrt(', value: 'sqrt(', class: 'func' },
     { label: 'abs(', value: 'abs(', class: 'func' },
-    // Row 3: Main pad
     { label: '7', value: '7', class: 'num' },
     { label: '8', value: '8', class: 'num' },
     { label: '9', value: '9', class: 'num' },
@@ -344,7 +560,6 @@ export default function Calculator() {
     { label: '0', value: '0', class: 'num' },
     { label: ')', value: ')', class: 'paren-close' },
     { label: '+', value: '+', class: 'op' },
-    // Row 4: Control
     { label: '^', value: '^', class: 'op' },
     { label: '.', value: '.', class: 'num' },
     { label: '!', value: '!', class: 'op' },
@@ -377,42 +592,42 @@ export default function Calculator() {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Calculator body */}
       <div className="bg-gray-900 rounded-2xl p-4 shadow-2xl border border-gray-700 w-full max-w-lg">
         
-        {/* Display area */}
-        <div className={`rounded-xl p-4 mb-3 border-2 transition-colors duration-300 ${
+        {/* Display area with relative positioning for overlay */}
+        <div className={`relative rounded-xl p-4 mb-3 border-2 transition-colors duration-300 ${
           lastError ? 'bg-red-950/30 border-red-700' :
           bracketInfo.isBalanced ? 'bg-gray-950 border-gray-700' :
           'bg-orange-950/20 border-orange-700/50'
         }`}>
-          {/* Previous expression */}
-          <div className="text-gray-500 text-xs h-5 overflow-hidden text-right font-mono">
-            {history.length > 0 && `${history[0].expr} =`}
-          </div>
+          {/* Calculation Steps Overlay */}
+          <CalculationSteps steps={calcSteps} isVisible={showSteps} />
           
-          {/* Main expression with colored brackets */}
-          <div className="text-xl font-mono text-right min-h-[2rem] overflow-x-auto whitespace-nowrap scrollbar-thin">
-            <ColoredExpression expr={display} />
+          {/* Main display content (hidden when steps are shown) */}
+          <div className={!showSteps ? '' : 'opacity-30'}>
+            <div className="text-gray-500 text-xs h-5 overflow-hidden text-right font-mono">
+              {history.length > 0 && `${history[0].expr} =`}
+            </div>
+            
+            <div className="text-xl font-mono text-right min-h-[2rem] overflow-x-auto whitespace-nowrap scrollbar-thin">
+              <ColoredExpression expr={display} />
+            </div>
+
+            {livePreview && !lastError && display !== livePreview && (
+              <div className="text-right mt-1">
+                <span className="text-gray-500 text-xs">= </span>
+                <span className="text-green-400/70 text-sm font-mono">{livePreview}</span>
+              </div>
+            )}
+
+            {lastError && (
+              <div className="text-right mt-1">
+                <span className="text-red-400 text-xs font-medium">⚠ {lastError}</span>
+              </div>
+            )}
+
+            <BracketStatusBar bracketInfo={bracketInfo} />
           </div>
-
-          {/* Live preview */}
-          {livePreview && !lastError && display !== livePreview && (
-            <div className="text-right mt-1">
-              <span className="text-gray-500 text-xs">= </span>
-              <span className="text-green-400/70 text-sm font-mono">{livePreview}</span>
-            </div>
-          )}
-
-          {/* Error message */}
-          {lastError && (
-            <div className="text-right mt-1">
-              <span className="text-red-400 text-xs font-medium">⚠ {lastError}</span>
-            </div>
-          )}
-
-          {/* Bracket status bar */}
-          <BracketStatusBar bracketInfo={bracketInfo} />
         </div>
 
         {/* Settings row */}
@@ -427,13 +642,23 @@ export default function Calculator() {
             <span className="text-gray-400 text-xs">Smart backspace</span>
           </label>
           
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="text-gray-400 text-xs hover:text-white transition-colors flex items-center gap-1"
-          >
-            <span>{showHistory ? '▼' : '▶'}</span>
-            History {history.length > 0 && `(${history.length})`}
-          </button>
+          <div className="flex items-center gap-3">
+            {showSteps && (
+              <button
+                onClick={() => setShowSteps(false)}
+                className="text-indigo-400 text-xs hover:text-indigo-300 transition-colors"
+              >
+                ✕ Hide Steps
+              </button>
+            )}
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="text-gray-400 text-xs hover:text-white transition-colors flex items-center gap-1"
+            >
+              <span>{showHistory ? '▼' : '▶'}</span>
+              History {history.length > 0 && `(${history.length})`}
+            </button>
+          </div>
         </div>
 
         {/* History panel */}
@@ -446,7 +671,7 @@ export default function Calculator() {
                 <div
                   key={i}
                   className="text-xs py-1.5 px-2 border-b border-gray-800 last:border-0 flex justify-between items-center hover:bg-gray-800/50 rounded cursor-pointer"
-                  onClick={() => { setDisplay(item.expr); setLastError(null); }}
+                  onClick={() => { setDisplay(item.expr); setLastError(null); setShowSteps(false); }}
                 >
                   <span className="text-gray-400 font-mono truncate mr-2">{item.expr}</span>
                   <span className={`font-mono font-bold shrink-0 ${item.isError ? 'text-red-400' : 'text-green-400'}`}>
@@ -477,6 +702,7 @@ export default function Calculator() {
                 } else {
                   handleInput(btn.value);
                 }
+                setShowSteps(false);
               }}
               className={`${getButtonClass(btn)} py-2.5`}
               title={btn.class === 'autoclose' ? 'Auto-close all open brackets' : ''}
@@ -486,15 +712,14 @@ export default function Calculator() {
           ))}
         </div>
 
-        {/* Keyboard hint */}
         <p className="text-gray-600 text-xs text-center mt-3">
-          ⌨ Keyboard supported: 0-9, +, -, *, /, ^, (, ), Enter, Backspace, Esc
+          ⌨ Keyboard: 0-9, +, -, *, /, ^, (, ), Enter, Backspace, Esc
         </p>
       </div>
 
       {/* Expression examples */}
       <div className="text-center w-full max-w-lg">
-        <p className="text-gray-400 text-sm mb-2">Try these expressions:</p>
+        <p className="text-gray-400 text-sm mb-2">Try these expressions (click = to see steps):</p>
         <div className="flex flex-wrap gap-2 justify-center">
           {[
             { expr: 'sin(pi/2)', desc: '= 1' },
@@ -508,7 +733,7 @@ export default function Calculator() {
           ].map(item => (
             <button
               key={item.expr}
-              onClick={() => { setDisplay(item.expr); setLastError(null); }}
+              onClick={() => { setDisplay(item.expr); setLastError(null); setShowSteps(false); }}
               className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded-full border border-gray-600 transition-colors group"
               title={item.desc}
             >
@@ -521,34 +746,24 @@ export default function Calculator() {
 
       {/* Bracket color legend */}
       <div className="bg-gray-900 rounded-xl p-4 border border-gray-700 w-full max-w-lg">
-        <h3 className="text-gray-300 text-sm font-bold mb-3">🎨 Bracket Color Legend</h3>
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-green-400 font-mono text-lg font-bold">( )</span>
-            <span className="text-gray-400">Matched / Balanced</span>
+        <h3 className="text-gray-300 text-sm font-bold mb-3">🎨 Features</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div>
+            <h4 className="text-green-400 font-semibold mb-1">Bracket Colors</h4>
+            <ul className="text-gray-400 space-y-1">
+              <li><span className="text-green-400 font-mono">( )</span> = Matched</li>
+              <li><span className="text-red-400 font-mono animate-pulse">(</span> = Unclosed</li>
+              <li><span className="text-orange-400 font-mono animate-pulse">)</span> = Extra</li>
+            </ul>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-red-400 font-mono text-lg font-bold animate-pulse">(</span>
-            <span className="text-gray-400">Unclosed (needs ')' )</span>
+          <div>
+            <h4 className="text-indigo-400 font-semibold mb-1">Calculation Steps</h4>
+            <ul className="text-gray-400 space-y-1">
+              <li>• Shows order of operations</li>
+              <li>• Displays intermediate results</li>
+              <li>• Appears after pressing =</li>
+            </ul>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-orange-400 font-mono text-lg font-bold animate-pulse">)</span>
-            <span className="text-gray-400">Extra (no matching '(' )</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex gap-0.5">
-              {[1,2,3].map(i => (
-                <span key={i} className="inline-block w-2 h-3 bg-red-500/60 rounded-sm border border-red-400/50"></span>
-              ))}
-            </span>
-            <span className="text-gray-400">Visual stack (unclosed count)</span>
-          </div>
-        </div>
-        <div className="mt-3 pt-3 border-t border-gray-700">
-          <p className="text-gray-500 text-xs">
-            💡 <strong className="text-gray-400">Tip:</strong> The <span className="text-cyan-400 font-bold">)×</span> button auto-closes all unclosed brackets. 
-            The <span className="text-green-400 font-bold">(</span> and <span className="text-green-400 font-bold">)</span> buttons change color to show bracket status.
-          </p>
         </div>
       </div>
     </div>
