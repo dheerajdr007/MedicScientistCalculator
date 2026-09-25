@@ -663,7 +663,7 @@ const char* get_error_message(void) {
   {
     name: 'main.c',
     language: 'c',
-    description: 'Main entry point with REPL (Read-Eval-Print Loop). Handles user input, commands, and coordinates all modules.',
+    description: 'Main entry point with REPL, bracket matching visualization with ANSI colors, and coordination of all modules. Shows real-time bracket status with color coding.',
     content: `#include <stdio.h>
 #include <string.h>
 #include "tokenizer.h"
@@ -672,64 +672,144 @@ const char* get_error_message(void) {
 
 #define MAX_INPUT 1024
 
+/* ─── Bracket Analysis ─────────────────────────────────────── */
+typedef struct {
+    int open_count;
+    int close_count;
+    int unclosed;       /* '(' that need ')' */
+    int extra_close;    /* ')' with no matching '(' */
+    int is_balanced;
+} BracketInfo;
+
+BracketInfo analyze_brackets(const char* expr) {
+    BracketInfo info = {0, 0, 0, 0, 0};
+    int stack[256];
+    int top = -1;
+    
+    for (int i = 0; expr[i] != '\\0'; i++) {
+        if (expr[i] == '(') {
+            info.open_count++;
+            if (top < 255) stack[++top] = i;
+        } else if (expr[i] == ')') {
+            info.close_count++;
+            if (top >= 0) {
+                top--; /* matched */
+            } else {
+                info.extra_close++;
+            }
+        }
+    }
+    
+    info.unclosed = top + 1;
+    info.is_balanced = (info.unclosed == 0 && info.extra_close == 0);
+    return info;
+}
+
+/* Print bracket status with ANSI colors */
+void print_bracket_status(const char* expr) {
+    BracketInfo info = analyze_brackets(expr);
+    if (info.open_count == 0 && info.close_count == 0) return;
+    
+    printf("  \\033[90m─── Bracket Status ───\\033[0m\\n");
+    printf("  \\033[90m(\\033[0m opened: \\033[%sm%d\\033[0m", 
+           info.unclosed > 0 ? "91" : "92", info.open_count);
+    printf("  |  \\033[90m)\\033[0m closed: \\033[%sm%d\\033[0m",
+           info.extra_close > 0 ? "93" : "92", info.close_count);
+    
+    if (info.is_balanced) {
+        printf("  |  \\033[92m✓ Balanced\\033[0m\\n");
+    } else if (info.unclosed > 0) {
+        printf("  |  \\033[91m⚠ Need %d more ')'\\033[0m\\n", info.unclosed);
+        /* Visual stack indicator */
+        printf("  \\033[91m");
+        for (int i = 0; i < info.unclosed && i < 20; i++) {
+            printf("▌");
+        }
+        printf("\\033[0m\\n");
+    } else {
+        printf("  |  \\033[93m⚠ %d extra ')'\\033[0m\\n", info.extra_close);
+    }
+    printf("  \\033[90m─────────────────────\\033[0m\\n");
+}
+
+/* Print expression with colored brackets */
+void print_colored_expression(const char* expr) {
+    int stack[256], top = -1;
+    int matched_open[1024] = {0};
+    int matched_close[1024] = {0};
+    int len = strlen(expr);
+    
+    /* First pass: find matched pairs */
+    for (int i = 0; i < len; i++) {
+        if (expr[i] == '(') {
+            if (top < 255) stack[++top] = i;
+        } else if (expr[i] == ')') {
+            if (top >= 0) {
+                matched_open[stack[top--]] = 1;
+                matched_close[i] = 1;
+            }
+        }
+    }
+    
+    /* Second pass: print with colors */
+    printf("  ");
+    for (int i = 0; i < len; i++) {
+        if (expr[i] == '(' || expr[i] == ')') {
+            if (matched_open[i] || matched_close[i])
+                printf("\\033[92m%c\\033[0m", expr[i]); /* green = matched */
+            else if (expr[i] == '(')
+                printf("\\033[91m%c\\033[0m", expr[i]); /* red = unclosed */
+            else
+                printf("\\033[93m%c\\033[0m", expr[i]); /* orange = extra */
+        } else {
+            printf("%c", expr[i]);
+        }
+    }
+    printf("\\n");
+}
+
+/* ─── Help ─────────────────────────────────────────────────── */
 void print_help(void) {
-    printf("\\n=== Scientific Calculator Help ===\\n");
-    printf("Operators: + - * / ^ !\\n");
-    printf("Functions: sin cos tan asin acos atan\\n");
-    printf("           log ln sqrt abs\\n");
-    printf("Constants: pi e\\n");
-    printf("Commands:  help tokens ast quit\\n\\n");
+    printf("\\n");
+    printf("\\033[96m╔══════════════════════════════════════════════════╗\\033[0m\\n");
+    printf("\\033[96m║\\033[0m     \\033[1mScientific Calculator - Help\\033[0m               \\033[96m║\\033[0m\\n");
+    printf("\\033[96m╠══════════════════════════════════════════════════╣\\033[0m\\n");
+    printf("\\033[96m║\\033[0m  Operators: + - * / ^ !                    \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m  Functions: sin cos tan asin acos atan     \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m             log ln sqrt abs                \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m  Constants: pi  e                          \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m                                              \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m  \\033[92mBracket Colors:\\033[0m                                 \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m    \\033[92m( )\\033[0m = Matched/Balanced                      \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m    \\033[91m(\\033[0m   = Unclosed (needs closing)              \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m    \\033[93m)\\033[0m   = Extra (no matching open)              \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m                                              \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m  Commands: help tokens ast quit              \\033[96m║\\033[0m\\n");
+    printf("\\033[96m╚══════════════════════════════════════════════════╝\\033[0m\\n");
+    printf("\\n");
 }
 
-void show_tokens(const char* input) {
-    printf("\\n--- Tokens ---\\n");
-    Tokenizer tokenizer;
-    tokenizer_init(&tokenizer, input);
-    Token token;
-    int i = 0;
-    do {
-        token = tokenizer_next(&tokenizer);
-        printf("  [%d] %-10s '%s' (%.4f)\\n",
-               i++, token_type_to_string(token.type),
-               token.lexeme, token.value);
-    } while (token.type != TOKEN_EOF && token.type != TOKEN_ERROR);
-    printf("--------------\\n\\n");
-}
-
-void show_ast(const char* input) {
-    printf("\\n--- AST ---\\n");
-    Parser parser;
-    parser_init(&parser, input);
-    ASTNode* ast = parse_expression(&parser);
-    if (parser.has_error)
-        printf("  Error: %s\\n", parser.error_message);
-    else
-        print_ast(ast, 1);
-    free_ast(ast);
-    printf("-----------\\n\\n");
-}
-
+/* ─── Main ─────────────────────────────────────────────────── */
 int main(void) {
     char input[MAX_INPUT];
     char last_input[MAX_INPUT] = "";
     
-    printf("\\n=== Scientific Calculator (C) ===\\n");
-    printf("Architecture: Tokenizer -> Parser -> Evaluator\\n");
+    printf("\\n");
+    printf("\\033[96m╔══════════════════════════════════════════════════╗\\033[0m\\n");
+    printf("\\033[96m║\\033[0m     \\033[1mScientific Calculator (C Language)\\033[0m           \\033[96m║\\033[0m\\n");
+    printf("\\033[96m║\\033[0m     Tokenizer → Parser → AST → Evaluator     \\033[96m║\\033[0m\\n");
+    printf("\\033[96m╚══════════════════════════════════════════════════╝\\033[0m\\n");
     printf("Type 'help' for commands, 'quit' to exit.\\n\\n");
     
     while (1) {
-        printf("calc> ");
+        printf("\\033[92mcalc>\\033[0m ");
         if (fgets(input, MAX_INPUT, stdin) == NULL) break;
         
-        // Trim newline
         size_t len = strlen(input);
         if (len > 0 && input[len-1] == '\\n') input[--len] = '\\0';
         if (len == 0) continue;
         
-        if (strcmp(input, "quit") == 0) {
-            printf("Goodbye!\\n");
-            break;
-        }
+        if (strcmp(input, "quit") == 0) { printf("Goodbye!\\n"); break; }
         if (strcmp(input, "help") == 0) { print_help(); continue; }
         if (strcmp(input, "tokens") == 0) {
             if (strlen(last_input)) show_tokens(last_input);
@@ -744,18 +824,34 @@ int main(void) {
         
         strncpy(last_input, input, MAX_INPUT - 1);
         
-        // Parse and evaluate
+        /* Show colored expression and bracket status */
+        print_colored_expression(input);
+        print_bracket_status(input);
+        
+        /* Check bracket balance */
+        BracketInfo binfo = analyze_brackets(input);
+        if (!binfo.is_balanced) {
+            if (binfo.unclosed > 0)
+                printf("  \\033[91mError: Missing %d closing bracket%s\\033[0m\\n\\n",
+                       binfo.unclosed, binfo.unclosed > 1 ? "s" : "");
+            else
+                printf("  \\033[93mError: %d extra closing bracket%s\\033[0m\\n\\n",
+                       binfo.extra_close, binfo.extra_close > 1 ? "s" : "");
+            continue;
+        }
+        
+        /* Parse and evaluate */
         Parser parser;
         parser_init(&parser, input);
         ASTNode* ast = parse_expression(&parser);
         
         if (parser.has_error) {
-            printf("  Error: %s\\n\\n", parser.error_message);
+            printf("  \\033[91mParse error: %s\\033[0m\\n\\n", parser.error_message);
             free_ast(ast);
             continue;
         }
         if (parser.current_token.type != TOKEN_EOF) {
-            printf("  Error: Unexpected '%s'\\n\\n", parser.current_token.lexeme);
+            printf("  \\033[91mUnexpected '%s'\\033[0m\\n\\n", parser.current_token.lexeme);
             free_ast(ast);
             continue;
         }
@@ -764,12 +860,12 @@ int main(void) {
         free_ast(ast);
         
         if (result.is_error) {
-            printf("  Error: %s\\n\\n", result.error_message);
+            printf("  \\033[91mError: %s\\033[0m\\n\\n", result.error_message);
         } else {
-            if (result == (int)result && fabs(result) < 1e15)
-                printf("  = %d\\n\\n", (int)result.value);
+            if (result.value == (int)result.value && fabs(result.value) < 1e15)
+                printf("  \\033[92m= %d\\033[0m\\n\\n", (int)result.value);
             else
-                printf("  = %.10g\\n\\n", result.value);
+                printf("  \\033[92m= %.10g\\033[0m\\n\\n", result.value);
         }
     }
     return 0;

@@ -96,7 +96,38 @@ export default function ArchitectureDiagram() {
           </div>
           <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
             <h4 className="text-blue-400 font-bold text-sm mb-1">📄 main.c</h4>
-            <p className="text-gray-400 text-xs">REPL interface that coordinates all modules. Handles user commands (help, tokens, ast, quit) and displays results.</p>
+            <p className="text-gray-400 text-xs">REPL interface with <span className="text-green-400 font-semibold">bracket matching</span> visualization. Uses ANSI color codes to show matched (green), unclosed (red), and extra (orange) brackets in real-time.</p>
+          </div>
+        </div>
+        
+        {/* Bracket Matching Feature */}
+        <div className="mt-4 bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl p-5 border border-gray-700">
+          <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+            <span className="text-2xl">🎯</span> Bracket Matching Feature
+          </h3>
+          <p className="text-gray-400 text-sm mb-4">
+            Both the C terminal version and the web version feature real-time bracket analysis:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-950 rounded-lg p-3 border border-gray-700">
+              <h4 className="text-green-400 text-xs font-bold mb-2">TERMINAL (C version)</h4>
+              <div className="font-mono text-xs space-y-1">
+                <p><span className="text-green-400">calc&gt;</span> sin(pi/4)</p>
+                <p className="text-green-400">  sin<span className="text-green-400">(</span>pi/4<span className="text-green-400">)</span></p>
+                <p className="text-gray-500">  ─── Bracket Status ───</p>
+                <p><span className="text-gray-500">(</span> opened: <span className="text-green-400">1</span> | <span className="text-gray-500">)</span> closed: <span className="text-green-400">1</span> | <span className="text-green-400">✓ Balanced</span></p>
+              </div>
+            </div>
+            <div className="bg-gray-950 rounded-lg p-3 border border-gray-700">
+              <h4 className="text-red-400 text-xs font-bold mb-2">UNMATCHED DETECTION</h4>
+              <div className="font-mono text-xs space-y-1">
+                <p><span className="text-green-400">calc&gt;</span> sin(pi/4 + cos(</p>
+                <p>  sin<span className="text-green-400">(</span>pi/4 + cos<span className="text-red-400 animate-pulse">(</span></p>
+                <p className="text-gray-500">  ─── Bracket Status ───</p>
+                <p><span className="text-gray-500">(</span> opened: <span className="text-red-400">2</span> | <span className="text-gray-500">)</span> closed: <span className="text-green-400">1</span> | <span className="text-red-400">⚠ Need 1 more ')'</span></p>
+                <p className="text-red-400">  ▌</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
