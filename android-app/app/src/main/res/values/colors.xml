@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="calculator_background">#FF121212</color>
+    <color name="calculator_display">#FF1E1E1E</color>
+    <color name="calculator_button_number">#FF2D2D2D</color>
+    <color name="calculator_button_operator">#FFFF9500</color>
+    <color name="calculator_button_function">#FF4A4A8A</color>
+    <color name="calculator_button_equals">#FF34C759</color>
+    <color name="calculator_button_clear">#FFFF3B30</color>
+    <color name="calculator_text_primary">#FFFFFFFF</color>
+    <color name="calculator_text_secondary">#FF8E8E93</color>
+    <color name="bracket_matched">#FF34C759</color>
+    <color name="bracket_unclosed">#FFFF3B30</color>
+    <color name="bracket_extra">#FFFF9500</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
